@@ -150,3 +150,12 @@ macOS 包**无法在 Windows 上构建**（Tauri 打包依赖 macOS 宿主：cla
 
 CI：本仓库 `.github/workflows/ci.yml`（内核门禁 + 零依赖断言 + UI 独立工作区）；
 跨语言 E2E 与集成测试在私有仓库 `agentheart-test` 的 CI 中执行。
+
+## 许可证
+
+本项目以 **MIT License** 开源，全文见 [LICENSE](LICENSE)（各 crate 的 `Cargo.toml` 均标注 `license = "MIT"`）。
+
+Copyright (c) 2026 houzc
+
+在软件的所有副本或实质性部分中保留上述版权声明与本许可声明的前提下，可自由使用、复制、修改、
+合并、发布、分发、再许可和/或销售本软件。本软件按「原样」提供，不附带任何明示或暗示的担保。
