@@ -1,0 +1,119 @@
+# AgentHeart · 发布（侧车二进制）
+#
+# 产出 `agentheartd`（AgentHeart 侧车可执行文件）的多平台二进制，并作为 **GitHub Release 资产**上传。
+#
+# 触发方式：
+#   - 推送 `v*` 标签（如 `v0.1.0`）
+#   - Actions 页面手动触发（手动触发无标签，只产出 Actions Artifacts、**不创建 Release**）
+#
+# 说明：
+#   - 各平台**原生**构建，避免交叉编译；
+#   - `linux-arm64` 使用 arm64 runner；若组织不可用，可改为 `cross` 交叉编译；
+#   - macOS **UI 安装包**（Tauri dmg）由另一条流水线 `release-macos.yml` 产出。
+name: Release (sidecar)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) 各平台原生构建 + 打包 + 上传 artifact
+  # ---------------------------------------------------------------------------
+  sidecar:
+    name: agentheartd（${{ matrix.target }}）
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - runner: macos-13
+            target: x86_64-apple-darwin
+          - runner: macos-14
+            target: aarch64-apple-darwin
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 缓存 Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: 校验版本一致（tag == agentheart-core 版本）
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          declared=$(grep -m1 '^version' agentheart-core/Cargo.toml | sed -E 's/.*"(.*)".*/\1/')
+          expected="${GITHUB_REF_NAME#v}"
+          echo "agentheart-core=$declared 期望=$expected"
+          [ "$declared" = "$expected" ] || { echo "::error::版本不一致"; exit 1; }
+
+      - name: 发布构建（agentheartd）
+        run: cargo build --release --bin agentheartd
+
+      - name: 打包（Windows → zip）
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          Compress-Archive -Path target/release/agentheartd.exe `
+            -DestinationPath "out/agentheartd-${{ matrix.target }}.zip" -Force
+
+      - name: 打包（Unix → tar.gz）
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p out
+          tar -czf "out/agentheartd-${{ matrix.target }}.tar.gz" -C target/release agentheartd
+          ls -l out
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentheartd-${{ matrix.target }}
+          path: out/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # 2) GitHub Release：汇总各平台二进制（tag 触发时）
+  # ---------------------------------------------------------------------------
+  release:
+    name: GitHub Release
+    needs: sidecar
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 下载全部产物
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist
+
+      - name: 列出产物
+        run: ls -l dist
+
+      - name: 创建 Release 并上传资产
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag
