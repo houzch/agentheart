@@ -5,3 +5,5 @@
 # 代码生成
 **/gen/schemas
 **/*.rs.bk
+.idea
+.idea/
