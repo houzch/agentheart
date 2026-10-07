@@ -1,6 +1,6 @@
 [package]
 name = "agentheart-core"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.85"
 description = "AgentHeart 内核：轻量调度与消息处理心脏包（零第三方依赖，仅 std）"

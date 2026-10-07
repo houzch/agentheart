@@ -4,18 +4,18 @@ version = 4
 
 [[package]]
 name = "agentheart-adapters"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "agentheart-core",
 ]
 
 [[package]]
 name = "agentheart-core"
-version = "0.1.0"
+version = "1.0.0"
 
 [[package]]
 name = "agentheart-sdk"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "agentheart-core",
 ]

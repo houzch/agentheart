@@ -3,7 +3,7 @@
 # 产出 `agentheartd`（AgentHeart 侧车可执行文件）的多平台二进制，并作为 **GitHub Release 资产**上传。
 #
 # 触发方式：
-#   - 推送 `v*` 标签（如 `v0.1.0`）
+#   - 推送 `v*` 标签（如 `v1.0.0`）
 #   - Actions 页面手动触发（手动触发无标签，只产出 Actions Artifacts、**不创建 Release**）
 #
 # 说明：
