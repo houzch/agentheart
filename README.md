@@ -5,7 +5,7 @@
 
 - 内核：`agentheart-core/`（Rust，edition 2024，`[dependencies]` 为空）
 - SDK：`agentheart-sdk/`（Rust / Node / Python / Go / Java / C# + 适配器 + 可选 Tauri 2 控制台）
-- 测试与基准：**独立私有仓库** `agentheart-test`（不随本仓库开源；依赖本仓库的 `agentheart-core/`）
+
 
 ## 快速开始（一条命令）
 
