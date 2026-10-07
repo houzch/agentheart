@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 消息模型：标识、消息体与队列统计。
 
 use std::fmt;

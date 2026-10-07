@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 内核接口协议：帧编解码（16 字节头 + UTF-8 JSON 载荷）。
 //!
 //! 帧头布局（小端）：

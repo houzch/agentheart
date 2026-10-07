@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 循环任务控制器：随心跳推进迭代、把迭代包装为任务、串行执行与失败策略。
 //!
 //! ## 工作方式

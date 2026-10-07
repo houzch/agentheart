@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 极简结构化日志（零依赖）。
 //!
 //! 本模块是内核**唯一**的日志出口：其它代码禁止直接使用 `println!` / `eprintln!`。

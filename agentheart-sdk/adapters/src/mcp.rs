@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! MCP 适配器：通过 **stdio** 调用 MCP（Model Context Protocol）服务器的工具。
 //!
 //! 传输：MCP stdio —— 每行一个 JSON-RPC 2.0 消息。每次任务执行：拉起 MCP 服务端进程 →

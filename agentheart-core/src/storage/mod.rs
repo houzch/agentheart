@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 持久化：追加写 WAL 与原子写入。
 
 mod wal;

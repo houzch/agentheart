@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! AgentHeart 控制台（Tauri 2）后端。
 //!
 //! **内核外置**：本产物不属于内核，其依赖（Tauri 2）不进入内核依赖树

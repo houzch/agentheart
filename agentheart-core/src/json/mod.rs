@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 最小可用自研 JSON 编解码（零第三方依赖）。
 
 mod codec;

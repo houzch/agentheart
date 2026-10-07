@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 消息代理：有界队列、背压、至少一次投递、死信与 WAL 持久化。
 //!
 //! - **有界 + 背压**：`publish` 在队列满时阻塞（`try_publish` 返回 [`Error::Busy`]）；

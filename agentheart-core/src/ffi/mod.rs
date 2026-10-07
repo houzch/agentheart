@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! C ABI 导出（供 `cdylib` 宿主以标准 FFI 调用）。
 //!
 //! 约定：

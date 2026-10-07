@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 // AgentHeart Java SDK：本地 Socket 客户端（仅 JDK 标准库）。
 //
 // 协议：16 字节小端帧头 + UTF-8 JSON 载荷（见方案第 8.3 节）。
@@ -230,6 +233,46 @@ public final class AgentHeartClient implements Closeable {
     /** 列出定时任务（job.list）。 */
     public String jobs() throws IOException {
         return call("{\"m\":\"job.list\"}");
+    }
+
+    /**
+     * 创建定时任务（job.create）。
+     *
+     * <p>{@code queue} 必填，{@code cron} 与 {@code intervalMs} 二选一；
+     * 相同 {@code idempotencyKey} 返回既有 jobId。为 null 的字段不下发。
+     */
+    public String createJob(
+            String queue,
+            String cron,
+            Long intervalMs,
+            String name,
+            Boolean enabled,
+            String idempotencyKey) throws IOException {
+        StringBuilder builder = new StringBuilder("{\"m\":\"job.create\",\"queue\":\"")
+                .append(escape(queue))
+                .append('"');
+        if (name != null && !name.isEmpty()) {
+            builder.append(",\"name\":\"").append(escape(name)).append('"');
+        }
+        if (cron != null && !cron.isEmpty()) {
+            builder.append(",\"cron\":\"").append(escape(cron)).append('"');
+        }
+        if (intervalMs != null) {
+            builder.append(",\"intervalMs\":").append(intervalMs);
+        }
+        if (enabled != null) {
+            builder.append(",\"enabled\":").append(enabled);
+        }
+        if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
+            builder.append(",\"idempotencyKey\":\"").append(escape(idempotencyKey)).append('"');
+        }
+        builder.append('}');
+        return call(builder.toString());
+    }
+
+    /** 删除定时任务（job.delete）；不存在时内核返回 not_found。 */
+    public String deleteJob(String jobId) throws IOException {
+        return call("{\"m\":\"job.delete\",\"jobId\":\"" + escape(jobId) + "\"}");
     }
 
     /** 列出队列（queue.list）。 */

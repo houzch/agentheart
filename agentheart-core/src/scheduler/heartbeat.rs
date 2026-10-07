@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 心跳驱动器：以可配置间隔驱动 tick，支持空闲/繁忙自适应与即时唤醒。
 //!
 //! ## 自适应规则

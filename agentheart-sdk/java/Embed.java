@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 // AgentHeart Java SDK 内嵌承载（FFI）冒烟测试。
 //
 // 使用 JDK 22+ 的 Foreign Function & Memory API（java.lang.foreign）直接加载内核

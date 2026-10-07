@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! # AgentHeart 内核
 //!
 //! AI Agent 的"心脏"：心跳驱动的任务调度与消息处理内核。

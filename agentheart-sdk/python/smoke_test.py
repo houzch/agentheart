@@ -1,9 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 houzc
+
 """AgentHeart Python SDK 冒烟测试（M10）。
 
 需先启动侧车（公开仓库可用 ``scripts/quickstart.ps1``，或手动运行
 ``target/release/agentheartd``），再读取环境变量
 ``AH_ADDR``（host:port）与 ``AH_TOKEN``，完成：
-握手 → 健康 → 提交/查询任务 → 游标分页 → 事件订阅 → 队列 → 断线重连。
+握手 → 健康 → 提交/查询任务 → 游标分页 → 事件订阅 → 队列 → 定时任务 → 断线重连。
 
 全部通过时打印 ``SMOKE_OK python`` 并以 0 退出。
 """
@@ -86,11 +89,35 @@ def main() -> None:
     assert depth >= 1, f"队列深度异常: {depth}"
     print(f"步骤 7 队列：通过（depth={depth}）")
 
+    # 定时任务：创建（幂等）→ 可见 → 删除 → 消失
+    spec = {
+        "interval_ms": 60000,
+        "name": "smoke-job",
+        "enabled": False,
+        "idempotency_key": "smoke-job-1",
+    }
+    created = client.create_job("e2e", **spec)
+    assert created.get("ok") is True, f"job.create 失败: {created}"
+    job_id = created["result"]["jobId"]
+    assert job_id, "job.create 未返回 jobId"
+
+    duplicated = client.create_job("e2e", **spec)
+    assert duplicated["result"]["jobId"] == job_id, "相同 idempotency_key 应返回既有 jobId"
+
+    job_ids = [item["id"] for item in client.jobs()["result"]["items"]]
+    assert job_id in job_ids, f"job.list 未包含 {job_id}"
+
+    removed = client.delete_job(job_id)
+    assert removed["result"].get("deleted") is True, "job.delete 未返回 deleted=true"
+    job_ids_after = [item["id"] for item in client.jobs()["result"]["items"]]
+    assert job_id not in job_ids_after, f"job.delete 后仍能查到 {job_id}"
+    print(f"步骤 8 定时任务：通过（create 幂等 → list → delete：{job_id}）")
+
     # 断线重连
     client.close()
     client.reconnect()
     assert client.health().get("ok") is True, "重连后 health 失败"
-    print("步骤 8 断线重连：通过")
+    print("步骤 9 断线重连：通过")
     client.close()
 
     print("SMOKE_OK python")

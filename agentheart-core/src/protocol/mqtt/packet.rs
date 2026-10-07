@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! MQTT 3.1.1 报文编解码（子集，零依赖）。
 //!
 //! 固定头：`byte0 = type<<4 | flags`，随后为**变长剩余长度**（7 位一组，最多 4 字节）。

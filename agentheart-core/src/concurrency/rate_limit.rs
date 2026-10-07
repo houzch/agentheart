@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 令牌桶限流。
 
 /// 令牌桶限流配置（公开，用于 [`crate::SchedulerConfig`]）。

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 时钟抽象：便于测试注入确定性时间。
 //!
 //! 内核内部统一通过 [`Clock`] 读取时间；生产环境使用 [`SystemClock`]，

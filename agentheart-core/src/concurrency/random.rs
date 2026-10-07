@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 自研伪随机数（零依赖）：用于重试退避抖动。
 //!
 //! 采用 xorshift64* 变体，以系统时间与进程号播种，满足"抖动"用途，非密码学安全。

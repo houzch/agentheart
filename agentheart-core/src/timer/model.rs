@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 定时任务模型：标识、调度方式、状态与错过补偿策略。
 
 use std::fmt;
@@ -128,6 +131,8 @@ pub struct Job {
     pub max_consecutive_failures: u32,
     /// 每次触发所生成任务的最大尝试次数。
     pub max_attempts: u32,
+    /// 幂等键（相同键的注册请求返回既有任务 ID）。
+    pub idempotency_key: Option<String>,
 }
 
 impl Job {
@@ -154,6 +159,7 @@ impl Job {
             consecutive_failures: 0,
             max_consecutive_failures: DEFAULT_MAX_CONSECUTIVE_FAILURES,
             max_attempts: DEFAULT_TRIGGER_MAX_ATTEMPTS,
+            idempotency_key: None,
         })
     }
 
@@ -177,6 +183,7 @@ impl Job {
             consecutive_failures: 0,
             max_consecutive_failures: DEFAULT_MAX_CONSECUTIVE_FAILURES,
             max_attempts: DEFAULT_TRIGGER_MAX_ATTEMPTS,
+            idempotency_key: None,
         }
     }
 
@@ -189,6 +196,12 @@ impl Job {
     /// 设置每次触发所生成任务的最大尝试次数（至少为 1）。
     pub fn max_attempts(mut self, attempts: u32) -> Self {
         self.max_attempts = attempts.max(1);
+        self
+    }
+
+    /// 设置幂等键（相同键的注册请求返回既有任务 ID）。
+    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
         self
     }
 
@@ -223,8 +236,18 @@ impl Job {
     }
 }
 
+/// 定时任务 ID 的进程内单调序号。
+static JOB_SEQ: AtomicU64 = AtomicU64::new(1);
+
 fn next_job_id() -> String {
-    static SEQ: AtomicU64 = AtomicU64::new(1);
-    let sequence = SEQ.fetch_add(1, Ordering::Relaxed);
+    let sequence = JOB_SEQ.fetch_add(1, Ordering::Relaxed);
     format!("j-{sequence}")
+}
+
+/// 确保后续生成的 [`JobId`] 序号不小于 `seq`。
+///
+/// 供 WAL 回放后调用：`JobId` 序号来自进程内计数器，重启后会从 1 重新开始，
+/// 若不推进则会与已恢复的既有 ID 冲突。
+pub fn ensure_job_sequence_at_least(seq: u64) {
+    JOB_SEQ.fetch_max(seq, Ordering::Relaxed);
 }

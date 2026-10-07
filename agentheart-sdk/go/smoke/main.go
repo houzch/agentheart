@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 // AgentHeart Go SDK 冒烟测试：连接侧车并逐项验证 M10 协议能力。
 //
 // 从环境变量读取 AH_ADDR（形如 127.0.0.1:12345）与 AH_TOKEN；
@@ -124,7 +127,37 @@ func main() {
 		fail("队列 e2e-q depth=%v，期望 >= 1", depth)
 	}
 
-	// 8. 断线重连
+	// 8. 定时任务：create（幂等）→ list 可见 → delete → 消失
+	jobOptions := map[string]any{
+		"intervalMs":     60000,
+		"name":           "smoke-job",
+		"enabled":        false,
+		"idempotencyKey": "smoke-job-1",
+	}
+	created, err := client.CreateJob("e2e", jobOptions)
+	check("CreateJob", err)
+	jobID, _ := lookup(created, "result", "jobId").(string)
+	if jobID == "" {
+		fail("CreateJob 未返回 jobId: %s", created)
+	}
+	duplicated, err := client.CreateJob("e2e", jobOptions)
+	check("CreateJob(幂等)", err)
+	if againID, _ := lookup(duplicated, "result", "jobId").(string); againID != jobID {
+		fail("相同 idempotencyKey 返回了不同 jobId: %s vs %s", againID, jobID)
+	}
+	if !hasJobID(client, jobID) {
+		fail("job.list 未包含 %s", jobID)
+	}
+	removed, err := client.DeleteJob(jobID)
+	check("DeleteJob", err)
+	if lookup(removed, "result", "deleted") != true {
+		fail("DeleteJob 未返回 deleted=true: %s", removed)
+	}
+	if hasJobID(client, jobID) {
+		fail("job.delete 后仍能查到 %s", jobID)
+	}
+
+	// 9. 断线重连
 	check("Close", client.Close())
 	check("Reconnect", client.Reconnect())
 	health, err = client.Health()
@@ -133,7 +166,7 @@ func main() {
 		fail("重连后 Health 响应缺少 ok=true: %s", health)
 	}
 
-	// 9. 全部通过
+	// 10. 全部通过
 	fmt.Println("SMOKE_OK go")
 }
 
@@ -175,4 +208,22 @@ func lookup(response string, path ...string) any {
 		value = object[key]
 	}
 	return value
+}
+
+// hasJobID 判断 job.list 是否包含指定 id。
+func hasJobID(client *agentheart.Client, id string) bool {
+	response, err := client.Jobs()
+	if err != nil {
+		return false
+	}
+	items, ok := lookup(response, "result", "items").([]any)
+	if !ok {
+		return false
+	}
+	for _, item := range items {
+		if object, ok := item.(map[string]any); ok && object["id"] == id {
+			return true
+		}
+	}
+	return false
 }

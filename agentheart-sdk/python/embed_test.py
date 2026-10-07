@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 houzc
+
 """AgentHeart 内嵌承载（FFI / ctypes）冒烟测试（M10）。
 
 直接加载内核 `cdylib`（`agentheart_core.dll` / `libagentheart_core.so` / `libagentheart_core.dylib`），

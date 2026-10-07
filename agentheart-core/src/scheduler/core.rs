@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 调度中心核心：任务提交、线程池执行、超时重试与定时任务。
 
 use std::collections::HashMap;
@@ -18,8 +21,11 @@ use crate::concurrency::{FileLock, RateLimit};
 use crate::error::{Error, Result};
 use crate::json::Value;
 use crate::observe::{EventBus, Metrics, log};
+use crate::storage::Wal;
 use crate::task::{Task, TaskId, TaskSpan, TaskState};
-use crate::timer::{Job, JobId, JobState, MisfirePolicy};
+use crate::timer::{
+    Cron, Job, JobId, JobState, MisfirePolicy, Schedule, ensure_job_sequence_at_least,
+};
 
 use super::heartbeat::{Heartbeat, HeartbeatConfig, Load};
 use super::queue::{ReadyEntry, TaskQueue};
@@ -165,6 +171,8 @@ struct Shared {
     timers_paused: AtomicBool,
     events: Mutex<Option<Arc<EventBus>>>,
     idempotency: Mutex<IdempotencyMap>,
+    /// 定时任务幂等键 -> JobId（`job.create` 幂等注册）。
+    job_idempotency: Mutex<HashMap<String, JobId>>,
     locks: ResourceLocks,
     rate: Mutex<Option<TokenBucket>>,
     rng: Mutex<Rng>,
@@ -172,6 +180,8 @@ struct Shared {
     hooks: Mutex<Vec<TickHook>>,
     /// 任务看门狗超时（由配置注入；`None` 表示关闭）。
     watchdog: Option<Duration>,
+    /// 定时任务持久化日志（`None` 表示内存模式）。
+    wal: Option<Wal>,
 }
 
 /// 调度器：心跳驱动的任务调度与执行中心。
@@ -199,6 +209,37 @@ impl Scheduler {
 
     /// 使用指定时钟创建调度器（便于测试注入确定时间）。
     pub fn with_clock(config: SchedulerConfig, clock: Arc<dyn Clock>) -> Self {
+        Self::build(config, clock, None)
+    }
+
+    /// 创建带 WAL 的调度器（使用系统时钟，尚未启动线程），并回放历史定时任务。
+    ///
+    /// # Errors
+    /// WAL 回放失败时返回错误。
+    pub fn with_journal(config: SchedulerConfig, clock: Arc<dyn Clock>, wal: Wal) -> Result<Self> {
+        let scheduler = Self::build(config, clock, Some(wal));
+        scheduler.recover()?;
+        Ok(scheduler)
+    }
+
+    /// 使用系统时钟创建并立即启动。
+    pub fn start_with(config: SchedulerConfig, handler: Handler) -> Self {
+        let scheduler = Self::new(config);
+        scheduler.start(handler);
+        scheduler
+    }
+
+    /// 创建带 WAL 的调度器并立即启动。
+    ///
+    /// # Errors
+    /// WAL 回放失败时返回错误。
+    pub fn start_with_journal(config: SchedulerConfig, handler: Handler, wal: Wal) -> Result<Self> {
+        let scheduler = Self::with_journal(config, Arc::new(SystemClock), wal)?;
+        scheduler.start(handler);
+        Ok(scheduler)
+    }
+
+    fn build(config: SchedulerConfig, clock: Arc<dyn Clock>, wal: Option<Wal>) -> Self {
         let heartbeat = Heartbeat::new(HeartbeatConfig {
             interval: config.heartbeat_interval,
             adaptive: config.adaptive_heartbeat,
@@ -220,12 +261,14 @@ impl Scheduler {
             timers_paused: AtomicBool::new(false),
             events: Mutex::new(None),
             idempotency: Mutex::new(IdempotencyMap::new(config.idempotency_capacity)),
+            job_idempotency: Mutex::new(HashMap::new()),
             locks: ResourceLocks::default(),
             rate: Mutex::new(config.rate_limit.map(TokenBucket::new)),
             rng: Mutex::new(Rng::from_entropy()),
             leader: Mutex::new(None),
             hooks: Mutex::new(Vec::new()),
             watchdog: config.task_watchdog_timeout,
+            wal,
         });
         Self {
             shared,
@@ -233,13 +276,6 @@ impl Scheduler {
             workers: Mutex::new(Vec::new()),
             heartbeat_thread: Mutex::new(None),
         }
-    }
-
-    /// 使用系统时钟创建并立即启动。
-    pub fn start_with(config: SchedulerConfig, handler: Handler) -> Self {
-        let scheduler = Self::new(config);
-        scheduler.start(handler);
-        scheduler
     }
 
     /// 设置 / 替换任务处理函数。
@@ -565,12 +601,30 @@ impl Scheduler {
 
     // ---- 定时任务 ----
 
-    /// 注册定时任务，返回任务 ID。
-    pub fn add_job(&self, mut job: Job) -> JobId {
+    /// 注册定时任务，返回任务 ID；携带幂等键且已有同键任务时返回既有任务 ID。
+    ///
+    /// WAL 模式下**先落盘再生效**：写入失败则不注册，避免「内存有、盘上无」。
+    ///
+    /// # Errors
+    /// WAL 写入失败时返回错误。
+    pub fn add_job(&self, mut job: Job) -> Result<JobId> {
+        if let Some(key) = &job.idempotency_key {
+            if let Some(existing) = lock(&self.shared.job_idempotency).get(key) {
+                return Ok(existing.clone());
+            }
+        }
         job.refresh_next(self.now());
+        if let Err(error) = self.journal_job(&job) {
+            emit_error(&self.shared, &error, Some("job"));
+            return Err(error);
+        }
         let id = job.id.clone();
+        let key = job.idempotency_key.clone();
         lock(&self.shared.state).jobs.insert(id.clone(), job);
-        id
+        if let Some(key) = key {
+            lock(&self.shared.job_idempotency).insert(key, id.clone());
+        }
+        Ok(id)
     }
 
     /// 查询定时任务快照。
@@ -586,26 +640,120 @@ impl Scheduler {
     /// 启用 / 停用定时任务。
     ///
     /// # Errors
-    /// 任务不存在时返回 [`Error::NotFound`]。
+    /// 任务不存在，或 WAL 写入失败时返回错误。
     pub fn set_job_state(&self, id: &JobId, next: JobState) -> Result<()> {
         let now = self.now();
-        let mut guard = lock(&self.shared.state);
-        let job = guard.jobs.get_mut(id).ok_or_else(|| Error::NotFound {
-            kind: "job",
-            id: id.to_string(),
-        })?;
-        job.state = next;
-        if next == JobState::Enabled {
-            job.refresh_next(now);
-            // 重新启用时重置连续失败计数
-            job.consecutive_failures = 0;
+        let snapshot = {
+            let mut guard = lock(&self.shared.state);
+            let job = guard.jobs.get_mut(id).ok_or_else(|| Error::NotFound {
+                kind: "job",
+                id: id.to_string(),
+            })?;
+            job.state = next;
+            if next == JobState::Enabled {
+                job.refresh_next(now);
+                // 重新启用时重置连续失败计数
+                job.consecutive_failures = 0;
+            }
+            job.clone()
+        };
+        if let Err(error) = self.journal_job(&snapshot) {
+            emit_error(&self.shared, &error, Some(id.as_str()));
+            return Err(error);
         }
         Ok(())
     }
 
-    /// 移除定时任务。
-    pub fn remove_job(&self, id: &JobId) -> Option<Job> {
-        lock(&self.shared.state).jobs.remove(id)
+    /// 移除定时任务（同时清理其幂等键，使同键可再次注册）。
+    ///
+    /// WAL 模式下**先落盘再生效**。
+    ///
+    /// # Errors
+    /// WAL 写入失败时返回错误（此时任务不会被移除）。
+    pub fn remove_job(&self, id: &JobId) -> Result<Option<Job>> {
+        let Some(job) = lock(&self.shared.state).jobs.get(id).cloned() else {
+            return Ok(None);
+        };
+        if let Err(error) = self.journal_job_deleted(id) {
+            emit_error(&self.shared, &error, Some(id.as_str()));
+            return Err(error);
+        }
+        lock(&self.shared.state).jobs.remove(id);
+        if let Some(key) = &job.idempotency_key {
+            lock(&self.shared.job_idempotency).remove(key);
+        }
+        Ok(Some(job))
+    }
+
+    // ---- 定时任务持久化（WAL） ----
+
+    /// 追加一条定时任务快照（WAL 未启用时为空操作）。
+    fn journal_job(&self, job: &Job) -> Result<()> {
+        let Some(wal) = &self.shared.wal else {
+            return Ok(());
+        };
+        wal.append(&job_record(job))
+    }
+
+    /// 追加一条定时任务删除记录（WAL 未启用时为空操作）。
+    fn journal_job_deleted(&self, id: &JobId) -> Result<()> {
+        let Some(wal) = &self.shared.wal else {
+            return Ok(());
+        };
+        let mut record = Value::object();
+        record.insert("op", Value::String("job.delete".to_string()));
+        record.insert("id", Value::String(id.to_string()));
+        wal.append(&record)
+    }
+
+    /// 回放 WAL 恢复定时任务（WAL 未启用时为空操作）。
+    ///
+    /// 记录按写入顺序折叠：`op=job` 为快照 upsert，`op=job.delete` 为墓碑，
+    /// 因此「删除后重建」也能得到正确结果。恢复出的任务按当前时间**重算**下次触发，
+    /// 并推进 ID 序号以避免与既有 ID 冲突。
+    ///
+    /// # Errors
+    /// WAL 读取或解析失败时返回错误。
+    fn recover(&self) -> Result<()> {
+        let Some(wal) = &self.shared.wal else {
+            return Ok(());
+        };
+        let records = wal.replay()?;
+        let now = self.now();
+        let mut jobs: HashMap<JobId, Job> = HashMap::new();
+        for record in &records {
+            match record.get("op").and_then(Value::as_str) {
+                Some("job") => {
+                    if let Some(job) = job_from_record(record, now) {
+                        jobs.insert(job.id.clone(), job);
+                    }
+                }
+                Some("job.delete") => {
+                    if let Some(id) = record.get("id").and_then(Value::as_str) {
+                        jobs.remove(&JobId::new(id));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let max_seq = jobs.keys().map(job_sequence).max().unwrap_or(0);
+        {
+            let mut state = lock(&self.shared.state);
+            for (id, job) in &jobs {
+                state.jobs.insert(id.clone(), job.clone());
+            }
+        }
+        {
+            let mut idempotency = lock(&self.shared.job_idempotency);
+            for job in jobs.values() {
+                if let Some(key) = &job.idempotency_key {
+                    idempotency.insert(key.clone(), job.id.clone());
+                }
+            }
+        }
+        ensure_job_sequence_at_least(max_seq.saturating_add(1));
+        Ok(())
     }
 
     /// 立即触发一次定时任务，返回生成的任务 ID。
@@ -1173,6 +1321,90 @@ fn collect_due_slots(job: &Job, now_ms: u64, max_catch_up: u32) -> Vec<u64> {
         };
     }
     slots
+}
+
+/// 定时任务快照 -> WAL 记录（`op=job`）。
+fn job_record(job: &Job) -> Value {
+    let mut record = Value::object();
+    record.insert("op", Value::String("job".to_string()));
+    record.insert("id", Value::String(job.id.to_string()));
+    record.insert("n", Value::String(job.name.clone()));
+    record.insert("q", Value::String(job.queue.clone()));
+    match &job.schedule {
+        Schedule::Cron(cron) => {
+            record.insert("cron", Value::String(cron.as_str().to_string()));
+        }
+        Schedule::Interval(interval) => {
+            record.insert("itv", Value::Number(interval.as_millis() as f64));
+        }
+    }
+    record.insert("st", Value::String(job.state.as_str().to_string()));
+    record.insert("mf", Value::String(job.misfire.as_str().to_string()));
+    record.insert("ma", Value::Number(f64::from(job.max_attempts)));
+    record.insert(
+        "mcf",
+        Value::Number(f64::from(job.max_consecutive_failures)),
+    );
+    if let Some(key) = &job.idempotency_key {
+        record.insert("ik", Value::String(key.clone()));
+    }
+    record
+}
+
+/// WAL 记录 -> 定时任务快照（`op` 非 `job`、缺 `id` 或 Cron 非法时返回 `None`）。
+///
+/// 下次触发时间按 `now` 重算（启用态），运行期统计（上次触发 / 连续失败）不持久化。
+fn job_from_record(record: &Value, now: u64) -> Option<Job> {
+    if record.get("op").and_then(Value::as_str) != Some("job") {
+        return None;
+    }
+    let id = record.get("id").and_then(Value::as_str)?;
+    if id.is_empty() {
+        return None;
+    }
+    let name = record.get("n").and_then(Value::as_str).unwrap_or(id);
+    let queue = record.get("q").and_then(Value::as_str).unwrap_or("default");
+
+    // 以默认值为基底，再覆盖记录中的调度方式 / 阈值 / 状态 / 补偿策略
+    let mut job = Job::from_interval(name, queue, Duration::from_millis(1)).with_id(JobId::new(id));
+    job.schedule = if let Some(expression) = record.get("cron").and_then(Value::as_str) {
+        Schedule::Cron(Cron::parse(expression).ok()?)
+    } else {
+        let millis = record
+            .get("itv")
+            .and_then(Value::as_f64)
+            .unwrap_or(1.0)
+            .max(1.0);
+        Schedule::Interval(Duration::from_millis(millis as u64))
+    };
+    if let Some(threshold) = record.get("mcf").and_then(Value::as_f64) {
+        job.max_consecutive_failures = (threshold as u32).max(1);
+    }
+    if let Some(attempts) = record.get("ma").and_then(Value::as_f64) {
+        job.max_attempts = (attempts as u32).max(1);
+    }
+    job.idempotency_key = record.get("ik").and_then(Value::as_str).map(str::to_string);
+    job.state = match record.get("st").and_then(Value::as_str) {
+        Some("disabled") => JobState::Disabled,
+        _ => JobState::Enabled,
+    };
+    job.misfire = match record.get("mf").and_then(Value::as_str) {
+        Some("skip") => MisfirePolicy::Skip,
+        Some("catch_up") => MisfirePolicy::CatchUp,
+        _ => MisfirePolicy::FireOnce,
+    };
+    if job.state == JobState::Enabled {
+        job.refresh_next(now);
+    }
+    Some(job)
+}
+
+/// 从 `j-<n>` 形式的 [`JobId`] 中取出序号（其它形式返回 0）。
+fn job_sequence(id: &JobId) -> u64 {
+    id.as_str()
+        .strip_prefix("j-")
+        .and_then(|text| text.parse().ok())
+        .unwrap_or(0)
 }
 
 /// 投递一条错误事件（`event.error`；未绑定事件总线时为空操作）。

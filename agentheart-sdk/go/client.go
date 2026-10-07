@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 // Package agentheart 提供 AgentHeart 内核接口的 Go 客户端（仅标准库）。
 //
 // 协议：16 字节小端帧头 + UTF-8 JSON 载荷（见方案第 8.3 节）。
@@ -234,6 +237,23 @@ func (c *Client) ListTasks(limit int, cursor string) (*TaskPage, error) {
 // Jobs 列出定时任务（job.list）。
 func (c *Client) Jobs() (string, error) {
 	return c.callJSON(map[string]any{"m": "job.list"})
+}
+
+// CreateJob 创建定时任务（job.create）。queue 必填，cron 与 intervalMs 二选一；
+// 相同 idempotencyKey 返回既有 jobId。
+//
+// options 使用协议字段名（如 intervalMs、name、enabled、idempotencyKey），留空不下发。
+func (c *Client) CreateJob(queue string, options map[string]any) (string, error) {
+	request := map[string]any{"m": "job.create", "queue": queue}
+	for key, value := range options {
+		request[key] = value
+	}
+	return c.callJSON(request)
+}
+
+// DeleteJob 删除定时任务（job.delete）；不存在时内核返回 not_found。
+func (c *Client) DeleteJob(jobID string) (string, error) {
+	return c.callJSON(map[string]any{"m": "job.delete", "jobId": jobID})
 }
 
 // Queues 列出队列（queue.list）。

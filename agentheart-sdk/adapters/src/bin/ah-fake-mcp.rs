@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 测试用极简 MCP stdio 服务端（仅用于验证 [`agentheart_adapters::McpAdapter`]）。
 //!
 //! 支持 `initialize` 与 `tools/call`（回显工具名与参数）。不参与生产场景。

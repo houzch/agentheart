@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 houzc
+
 # AgentHeart Quick Start (one command, public repo)
 #
 # Builds the kernel + sidecar + cdylib, starts the sidecar, then runs the

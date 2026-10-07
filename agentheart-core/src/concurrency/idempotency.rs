@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 幂等去重表（带上限的 FIFO 淘汰）。
 
 use std::collections::{HashMap, VecDeque};

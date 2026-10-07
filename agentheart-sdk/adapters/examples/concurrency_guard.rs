@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 「并发冲突治理」示例（M11）：同资源串行 + 幂等去重。
 //!
 //! 演示阶段一 M4 的关键能力：同一**资源键**（`Task::key`）的任务串行执行，

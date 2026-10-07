@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 houzc
+ */
+
 /*
  * AgentHeart 内核 C ABI（零第三方依赖）。
  *

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 资源级互斥锁：同一资源键（如会话 ID）的任务串行执行。
 
 use std::collections::HashMap;

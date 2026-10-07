@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 任务框架：模型、状态机与优先级。
 
 mod model;

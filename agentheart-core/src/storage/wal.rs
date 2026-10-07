@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 持久化：追加写 WAL（零依赖）。
 //!
 //! 采用「追加写 + 启动回放」的经典 WAL 模式；记录以自研 JSON 单行存储，

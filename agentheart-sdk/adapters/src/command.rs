@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 命令行适配器：把任务映射为一次 shell / 程序调用。
 
 use std::path::PathBuf;

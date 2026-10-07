@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 基于文件独占创建的进程锁：用于集群选主 / 单例保护（零依赖）。
 
 use std::fs::{self, OpenOptions};

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 自动化规则引擎：订阅内核事件，命中规则即执行动作（事件驱动的日常自动化）。
 //!
 //! ## 工作方式

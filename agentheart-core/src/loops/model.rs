@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 循环任务模型：标识、状态机、规格与停止条件。
 //!
 //! 循环任务（Loop）以「迭代」为单位反复执行，直到满足停止条件

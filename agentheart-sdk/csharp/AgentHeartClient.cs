@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 // AgentHeart C# SDK：本地 Socket 客户端（仅 .NET 标准库）。
 //
 // 协议：16 字节小端帧头 + UTF-8 JSON 载荷（见方案第 8.3 节）。

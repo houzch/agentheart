@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 调度队列：优先级就绪队列 + 延时就绪（重试）队列。
 
 use std::cmp::Ordering;

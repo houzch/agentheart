@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! HTTP 适配器：把任务映射为一次 HTTP 请求（内置极简 HTTP/1.1 客户端，无第三方依赖）。
 
 use std::io::{Read, Write};

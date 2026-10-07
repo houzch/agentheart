@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 "use strict";
 /**
  * AgentHeart Node/TS SDK：内核接口客户端（仅标准库 net）。
@@ -222,6 +225,39 @@ class Client {
   }
 
   jobs() { return this.call({ m: "job.list" }); }
+
+  /**
+   * 创建定时任务（job.create）。`queue` 必填，`cron` 与 `intervalMs` 二选一；
+   * 相同 `idempotencyKey` 返回既有 jobId。
+   */
+  createJob(queue, options = {}) {
+    const request = { m: "job.create", queue };
+    const {
+      name,
+      cron,
+      intervalMs,
+      misfirePolicy,
+      maxAttempts,
+      maxConsecutiveFailures,
+      enabled,
+      idempotencyKey,
+    } = options;
+    if (name) request.name = name;
+    if (cron) request.cron = cron;
+    if (intervalMs !== undefined) request.intervalMs = intervalMs;
+    if (misfirePolicy) request.misfirePolicy = misfirePolicy;
+    if (maxAttempts !== undefined) request.maxAttempts = maxAttempts;
+    if (maxConsecutiveFailures !== undefined) {
+      request.maxConsecutiveFailures = maxConsecutiveFailures;
+    }
+    if (enabled !== undefined) request.enabled = enabled;
+    if (idempotencyKey) request.idempotencyKey = idempotencyKey;
+    return this.call(request);
+  }
+
+  /** 删除定时任务（job.delete）；不存在时内核返回 not_found。 */
+  deleteJob(jobId) { return this.call({ m: "job.delete", jobId }); }
+
   queues() { return this.call({ m: "queue.list" }); }
   queueStats(queue) { return this.call({ m: "queue.stats", queue }); }
   declareQueue(queue, capacity) {

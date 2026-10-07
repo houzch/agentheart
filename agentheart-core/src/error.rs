@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 内核统一错误类型。
 //!
 //! 错误码与方案第 8.3.8 节的内核接口协议保持一致。

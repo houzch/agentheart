@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 内核上下文与消息分发（协议第 8.6 节的实现）。
 
 use std::sync::Arc;
@@ -11,6 +14,7 @@ use crate::observe::EventBus;
 use crate::queue::{Broker, Message};
 use crate::scheduler::{PauseScope, Scheduler};
 use crate::task::{Task, TaskId, TaskState};
+use crate::timer::{Job, JobId, JobState, MisfirePolicy};
 
 use super::frame::PROTOCOL_VERSION;
 use super::pagination::{Page, page_slice};
@@ -26,6 +30,9 @@ const MAX_LOOP_INTERVAL_MS: f64 = 86_400_000.0;
 
 /// 循环迭代超时上限（毫秒）。
 const MAX_LOOP_TIMEOUT_MS: f64 = 86_400_000.0;
+
+/// 定时任务固定间隔上限（毫秒，`job.create` 校验用）。
+const MAX_JOB_INTERVAL_MS: f64 = 86_400_000.0;
 
 /// 内核上下文：调度器 + 消息代理 + 事件总线（可选循环任务引擎）。
 #[derive(Debug)]
@@ -106,11 +113,13 @@ impl Kernel {
             "task.resume" => self.task_resume(request),
             "task.retry" => self.task_retry(request),
             "task.trigger" => self.task_trigger(request),
+            "job.create" => self.job_create(request),
             "job.list" => self.job_list(request),
             "job.get" => self.job_get(request),
             "job.trigger" => self.job_trigger(request),
             "job.enable" => self.job_set_enabled(request, true),
             "job.disable" => self.job_set_enabled(request, false),
+            "job.delete" => self.job_delete(request),
             "scheduler.pause" => self.scheduler_pause(request),
             "scheduler.resume" => self.scheduler_resume(request),
             "queue.list" => self.queue_list(),
@@ -425,6 +434,146 @@ impl Kernel {
                 ok(name, result)
             }
             Err(err) => fail(name, &err),
+        }
+    }
+
+    /// 创建定时任务（`job.create`）。
+    fn job_create(&self, request: &Value) -> Value {
+        let Some(queue) = request.get("queue").and_then(Value::as_str) else {
+            return fail("job.create", &Error::Protocol("job.create requires queue"));
+        };
+        if queue.is_empty() {
+            return fail("job.create", &Error::Protocol("job.create requires queue"));
+        }
+
+        let cron = request.get("cron").and_then(Value::as_str);
+        let interval = request.get("intervalMs");
+        let mut job = match (cron, interval) {
+            (Some(_), Some(_)) => {
+                return fail(
+                    "job.create",
+                    &Error::Protocol("job.create accepts either cron or intervalMs, not both"),
+                );
+            }
+            (None, None) => {
+                return fail(
+                    "job.create",
+                    &Error::Protocol("job.create requires cron or intervalMs"),
+                );
+            }
+            (Some(expression), None) => match Job::from_cron(queue, queue, expression) {
+                Ok(job) => job,
+                Err(err) => return fail("job.create", &err),
+            },
+            (None, Some(value)) => {
+                let Some(number) = value.as_f64() else {
+                    return fail(
+                        "job.create",
+                        &Error::Protocol("job.create intervalMs must be a number"),
+                    );
+                };
+                if !(1.0..=MAX_JOB_INTERVAL_MS).contains(&number) {
+                    return fail(
+                        "job.create",
+                        &Error::Protocol("job.create intervalMs out of range"),
+                    );
+                }
+                Job::from_interval(queue, queue, Duration::from_millis(number as u64))
+            }
+        };
+
+        let name = request.get("name").and_then(Value::as_str);
+        job.name = name.map_or_else(|| job.id.to_string(), |value| value.to_string());
+
+        if let Some(policy) = request.get("misfirePolicy").and_then(Value::as_str) {
+            let parsed = match policy {
+                "skip" => MisfirePolicy::Skip,
+                "fire_once" => MisfirePolicy::FireOnce,
+                "catch_up" => MisfirePolicy::CatchUp,
+                _ => {
+                    return fail(
+                        "job.create",
+                        &Error::Protocol(
+                            "job.create misfirePolicy must be skip|fire_once|catch_up",
+                        ),
+                    );
+                }
+            };
+            job = job.misfire_policy(parsed);
+        }
+
+        if let Some(value) = request.get("maxAttempts") {
+            let Some(number) = value.as_f64() else {
+                return fail(
+                    "job.create",
+                    &Error::Protocol("job.create maxAttempts must be a number"),
+                );
+            };
+            if !(1.0..=f64::from(u32::MAX)).contains(&number) || number.fract() != 0.0 {
+                return fail(
+                    "job.create",
+                    &Error::Protocol("job.create maxAttempts out of range"),
+                );
+            }
+            job = job.max_attempts(number as u32);
+        }
+
+        if let Some(value) = request.get("maxConsecutiveFailures") {
+            let Some(number) = value.as_f64() else {
+                return fail(
+                    "job.create",
+                    &Error::Protocol("job.create maxConsecutiveFailures must be a number"),
+                );
+            };
+            if !(1.0..=f64::from(u32::MAX)).contains(&number) || number.fract() != 0.0 {
+                return fail(
+                    "job.create",
+                    &Error::Protocol("job.create maxConsecutiveFailures out of range"),
+                );
+            }
+            job = job.max_consecutive_failures(number as u32);
+        }
+
+        if request.get("enabled").and_then(Value::as_bool) == Some(false) {
+            job.state = JobState::Disabled;
+        }
+
+        if let Some(key) = request.get("idempotencyKey").and_then(Value::as_str) {
+            job = job.idempotency_key(key);
+        }
+
+        let id = match self.scheduler.add_job(job) {
+            Ok(id) => id,
+            Err(err) => return fail("job.create", &err),
+        };
+        let state = self
+            .scheduler
+            .job(&id)
+            .map_or(JobState::Enabled, |job| job.state);
+        let mut result = Value::object();
+        result.insert("jobId", Value::String(id.to_string()));
+        result.insert("state", Value::String(state.as_str().to_string()));
+        ok("job.create", result)
+    }
+
+    /// 删除定时任务（`job.delete`）。
+    fn job_delete(&self, request: &Value) -> Value {
+        let id = request.get("jobId").and_then(Value::as_str).unwrap_or("");
+        match self.scheduler.remove_job(&JobId::new(id)) {
+            Ok(Some(_)) => {
+                let mut result = Value::object();
+                result.insert("jobId", Value::String(id.to_string()));
+                result.insert("deleted", Value::Bool(true));
+                ok("job.delete", result)
+            }
+            Ok(None) => fail(
+                "job.delete",
+                &Error::NotFound {
+                    kind: "job",
+                    id: id.to_string(),
+                },
+            ),
+            Err(err) => fail("job.delete", &err),
         }
     }
 
@@ -1098,6 +1247,14 @@ fn job_to_value(job: &crate::timer::Job) -> Value {
     value.insert("id", Value::String(job.id.to_string()));
     value.insert("name", Value::String(job.name.clone()));
     value.insert("queue", Value::String(job.queue.clone()));
+    match &job.schedule {
+        crate::timer::Schedule::Cron(cron) => {
+            value.insert("cron", Value::String(cron.as_str().to_string()));
+        }
+        crate::timer::Schedule::Interval(interval) => {
+            value.insert("intervalMs", Value::Number(interval.as_millis() as f64));
+        }
+    }
     value.insert("state", Value::String(job.state.as_str().to_string()));
     value.insert(
         "misfirePolicy",
@@ -1117,6 +1274,7 @@ fn job_to_value(job: &crate::timer::Job) -> Value {
         "maxConsecutiveFailures",
         Value::Number(f64::from(job.max_consecutive_failures)),
     );
+    value.insert("maxAttempts", Value::Number(f64::from(job.max_attempts)));
     value
 }
 

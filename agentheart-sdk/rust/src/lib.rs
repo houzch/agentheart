@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! AgentHeart Rust SDK：内核复用 + 内核接口会话（Socket / 内嵌）。
 //!
 //! - [`Session::connect`]：连接侧车（`agentheartd`）内核接口（帧协议 + 事件流）；

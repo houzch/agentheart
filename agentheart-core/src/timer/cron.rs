@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! Cron 表达式解析与下次触发时间计算（UTC，零依赖）。
 //!
 //! 支持 5 字段（`分 时 日 月 周`）与 6 字段（`秒 分 时 日 月 周`）。
@@ -19,6 +22,8 @@ pub struct Cron {
     days_of_week: u64,
     dom_restricted: bool,
     dow_restricted: bool,
+    /// 解析时的原始表达式（供协议回显，保持用户输入的等价语义）。
+    expression: String,
 }
 
 impl Cron {
@@ -57,7 +62,13 @@ impl Cron {
             days_of_week: dow,
             dom_restricted: is_restricted(fields[if fields.len() == 5 { 2 } else { 3 }]),
             dow_restricted: is_restricted(fields[fields.len() - 1]),
+            expression: expression.to_string(),
         })
+    }
+
+    /// 解析时的原始 Cron 表达式。
+    pub fn as_str(&self) -> &str {
+        &self.expression
     }
 
     /// 计算严格晚于 `after_ms` 的下一个触发时间（Unix 毫秒）；无解返回 `None`。

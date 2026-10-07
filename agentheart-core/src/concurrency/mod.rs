@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 并发治理：幂等去重、资源锁、限流、抖动退避与文件锁选主。
 //!
 //! - 幂等 / 资源锁 / 随机数 / 令牌桶均为内核内部实现；

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 「每日报告」端到端示例（M11）。
 //!
 //! 串起阶段二的能力：**cron 定时触发** → **命令适配器执行采集动作** →
@@ -65,10 +68,12 @@ fn run() -> Result<(), String> {
     let _kernel = kernel;
 
     // 3) 每日 09:00 的定时任务（示例中手动触发一次以模拟到点）
-    let job: JobId = scheduler.add_job(
-        Job::from_cron("daily-report", COLLECT_QUEUE, "0 9 * * *")
-            .map_err(|error| error.to_string())?,
-    );
+    let job: JobId = scheduler
+        .add_job(
+            Job::from_cron("daily-report", COLLECT_QUEUE, "0 9 * * *")
+                .map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
     println!("[1/4] 已注册每日定时任务 job={job}（cron: 0 9 * * *）");
 
     // 4) 采集循环：最多 N 次迭代，完成后收敛

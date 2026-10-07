@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 "use strict";
 /**
  * AgentHeart Node SDK 冒烟测试（M10）
@@ -5,7 +8,7 @@
  * 需先启动侧车（公开仓库可用 `scripts/quickstart.ps1`，或手动运行
  * `target/release/agentheartd`），再读取环境变量
  * `AH_ADDR`（host:port）与 `AH_TOKEN`，完成：
- * 握手 → 健康 → 提交/查询任务 → 游标分页 → 事件订阅 → 队列 → 断线重连。
+ * 握手 → 健康 → 提交/查询任务 → 游标分页 → 事件订阅 → 队列 → 定时任务 → 断线重连。
  *
  * 全部通过时打印 `SMOKE_OK node` 并以 0 退出。
  */
@@ -87,12 +90,42 @@ async function main() {
   assert.ok(stats.result.queues[0].depth >= 1, `队列深度异常: ${JSON.stringify(stats)}`);
   console.log(`步骤 7 队列：通过（depth=${stats.result.queues[0].depth}）`);
 
+  // 定时任务：创建（幂等）→ 可见 → 删除 → 消失
+  const jobSpec = {
+    intervalMs: 60000,
+    name: "smoke-job",
+    enabled: false,
+    idempotencyKey: "smoke-job-1",
+  };
+  const created = await client.createJob("e2e", jobSpec);
+  assert.strictEqual(created.ok, true, `job.create 失败: ${JSON.stringify(created)}`);
+  const jobId = created.result.jobId;
+  assert.ok(jobId, "job.create 未返回 jobId");
+
+  const duplicated = await client.createJob("e2e", jobSpec);
+  assert.strictEqual(duplicated.result.jobId, jobId, "相同 idempotencyKey 应返回既有 jobId");
+
+  const listedJobs = await client.jobs();
+  assert.ok(
+    listedJobs.result.items.some((item) => item.id === jobId),
+    `job.list 未包含 ${jobId}`
+  );
+
+  const removed = await client.deleteJob(jobId);
+  assert.strictEqual(removed.result.deleted, true, "job.delete 未返回 deleted=true");
+  const afterDelete = await client.jobs();
+  assert.ok(
+    !afterDelete.result.items.some((item) => item.id === jobId),
+    `job.delete 后仍能查到 ${jobId}`
+  );
+  console.log(`步骤 8 定时任务：通过（create 幂等 → list → delete：${jobId}）`);
+
   // 断线重连
   client.close();
   await client.reconnect();
   const again = await client.health();
   assert.strictEqual(again.ok, true, "重连后 health 失败");
-  console.log("步骤 8 断线重连：通过");
+  console.log("步骤 9 断线重连：通过");
   client.close();
 
   console.log("SMOKE_OK node");

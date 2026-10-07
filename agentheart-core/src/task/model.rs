@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 任务模型：标识、状态机、优先级与任务记录。
 //!
 //! 时间戳统一为 **Unix 毫秒**（与内核接口协议一致，见方案 8.6）。

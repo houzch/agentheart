@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 自动化规则引擎（M8）：事件 → 动作的事件驱动自动化。
 //!
 //! - [`RuleSpec`] / [`Rule`]：规则规格与记录（事件类型 + 字段过滤器 + 动作）；

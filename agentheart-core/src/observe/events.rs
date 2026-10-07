@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 事件流：任务生命周期等事件的单调递增序号与重放窗口。
 //!
 //! 位于 `observe` 层，供内核（调度器）投递、由内核接口对外推送。

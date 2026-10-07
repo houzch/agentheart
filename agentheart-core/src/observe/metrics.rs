@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 指标计数（零依赖，基于 `std::sync::atomic`）。
 //!
 //! 调用方通过 `inc_*` 方法累加，`snapshot` 生成一次性快照用于读取与对外暴露。

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 houzc
+
 """AgentHeart Python SDK：内核接口客户端（仅标准库）。
 
 协议：16 字节小端帧头 + UTF-8 JSON 载荷（见方案第 8.3 节）。
@@ -241,6 +244,46 @@ class Client:
 
     def jobs(self) -> dict:
         return self.call({"m": "job.list"})
+
+    def create_job(
+        self,
+        queue_name: str,
+        cron: str | None = None,
+        interval_ms: int | None = None,
+        name: str | None = None,
+        misfire_policy: str | None = None,
+        max_attempts: int | None = None,
+        max_consecutive_failures: int | None = None,
+        enabled: bool | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict:
+        """创建定时任务（job.create）。
+
+        ``queue_name`` 必填，``cron`` 与 ``interval_ms`` 二选一；
+        相同 ``idempotency_key`` 返回既有 jobId。
+        """
+        request: dict = {"m": "job.create", "queue": queue_name}
+        if name:
+            request["name"] = name
+        if cron:
+            request["cron"] = cron
+        if interval_ms is not None:
+            request["intervalMs"] = interval_ms
+        if misfire_policy:
+            request["misfirePolicy"] = misfire_policy
+        if max_attempts is not None:
+            request["maxAttempts"] = max_attempts
+        if max_consecutive_failures is not None:
+            request["maxConsecutiveFailures"] = max_consecutive_failures
+        if enabled is not None:
+            request["enabled"] = enabled
+        if idempotency_key:
+            request["idempotencyKey"] = idempotency_key
+        return self.call(request)
+
+    def delete_job(self, job_id: str) -> dict:
+        """删除定时任务（job.delete）；不存在时内核返回 not_found。"""
+        return self.call({"m": "job.delete", "jobId": job_id})
 
     def queues(self) -> dict:
         return self.call({"m": "queue.list"})

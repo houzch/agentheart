@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! AgentHeart 接入适配器：把 Agent 动作映射为内核任务处理函数（M11）。
 //!
 //! 定位：本 crate **位于内核之外**（内核依赖树不含它），把「一次任务执行」映射为

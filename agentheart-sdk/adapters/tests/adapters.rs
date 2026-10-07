@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 适配器集成测试：命令行 / HTTP / MCP 三类动作，以及 Handler 与路由封装。
 
 use std::io::{Read, Write};

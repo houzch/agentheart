@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 内核接口协议：帧编解码、消息分发与本地 Socket 服务。
 //!
 //! 事件流（[`Event`] / [`EventBus`]）位于 `observe` 层，本模块对外重导出。

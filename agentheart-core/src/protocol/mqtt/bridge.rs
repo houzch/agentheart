@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! MQTT 3.1.1 子集桥接：把内核消息队列映射为 MQTT topic，供外部客户端对接。
 //!
 //! ## 映射约定

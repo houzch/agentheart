@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 "use strict";
 /**
  * MQTT 桥接示例：外部标准 MQTT 客户端 ↔ AgentHeart 内核。

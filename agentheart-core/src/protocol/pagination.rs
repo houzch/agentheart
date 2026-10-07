@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 游标分页：基于排序键的稳定分页（零依赖）。
 //!
 //! 游标为**不透明字符串**：`hex("<sortValue>:<id>")`，客户端不得解析。

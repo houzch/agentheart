@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! JSON 编解码实现（RFC 8259 子集，零第三方依赖）。
 //!
 //! - 解析：递归下降，带**深度上限**，防御恶意嵌套；严格校验转义、`\u` 代理对与 UTF-8；

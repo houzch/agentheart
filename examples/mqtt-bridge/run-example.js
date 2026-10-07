@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 "use strict";
 /**
  * MQTT 桥接示例编排脚本。

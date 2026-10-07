@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 // AgentHeart Java SDK 冒烟测试：连接侧车并逐项验证 M10 协议能力。
 //
 // 从环境变量读取 AH_ADDR（形如 127.0.0.1:12345）与 AH_TOKEN；
@@ -109,7 +112,32 @@ public class Smoke {
             fail("队列 e2e-q depth 不足（期望 >= 1）: " + stats);
         }
 
-        // 8. 断线重连
+        // 8. 定时任务：create（幂等）→ list 可见 → delete → 消失
+        String created = client.createJob("e2e", null, 60000L, "smoke-job", Boolean.FALSE, "smoke-job-1");
+        if (!created.contains("\"ok\":true")) {
+            fail("job.create 失败: " + created);
+        }
+        String jobId = stringField(created, "jobId");
+        if (jobId == null || jobId.isEmpty()) {
+            fail("job.create 未返回 jobId: " + created);
+        }
+        String duplicated = client.createJob("e2e", null, 60000L, "smoke-job", Boolean.FALSE, "smoke-job-1");
+        if (!jobId.equals(stringField(duplicated, "jobId"))) {
+            fail("相同 idempotencyKey 应返回既有 jobId: " + duplicated);
+        }
+        if (!containsJobId(client.jobs(), jobId)) {
+            fail("job.list 未包含 " + jobId);
+        }
+        String removed = client.deleteJob(jobId);
+        if (!removed.contains("\"deleted\":true")) {
+            fail("job.delete 未返回 deleted=true: " + removed);
+        }
+        if (containsJobId(client.jobs(), jobId)) {
+            fail("job.delete 后仍能查到 " + jobId);
+        }
+        System.out.println("步骤 8 定时任务：通过（create 幂等 → list → delete：" + jobId + "）");
+
+        // 9. 断线重连
         client.close();
         client.reconnect();
         String healthAgain = client.health();
@@ -117,7 +145,7 @@ public class Smoke {
             fail("重连后 Health 响应缺少 ok=true: " + healthAgain);
         }
 
-        // 9. 全部通过（由 main 打印 SMOKE_OK java）
+        // 10. 全部通过（由 main 打印 SMOKE_OK java）
         client.close();
     }
 
@@ -134,6 +162,11 @@ public class Smoke {
             return null;
         }
         return json.substring(start, end);
+    }
+
+    /** 判断 job.list 响应是否包含指定 jobId（匹配 "id":"<jobId>"）。 */
+    private static boolean containsJobId(String json, String jobId) {
+        return json.contains("\"id\":\"" + jobId + "\"");
     }
 
     /** 判断响应中 "depth": 的数值是否 >= min。 */

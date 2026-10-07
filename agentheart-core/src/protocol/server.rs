@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 houzc
+
 //! 内核接口服务：本地回环 Socket 服务端。
 //!
 //! 每个连接由「读线程 + 写线程」协作：读线程处理请求-响应，写线程负责事件推送。
