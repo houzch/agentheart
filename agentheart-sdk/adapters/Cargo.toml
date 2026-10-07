@@ -5,6 +5,7 @@ edition = "2024"
 rust-version = "1.85"
 publish = false
 description = "AgentHeart 接入适配器：把 Agent 动作（命令行 / HTTP / MCP）包装为内核任务处理函数"
+license = "MIT"
 
 # 独立工作区之外的普通成员；仅依赖内核 crate（无第三方依赖）。
 [dependencies]
