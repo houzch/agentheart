@@ -22,7 +22,7 @@ env:
 jobs:
   macos:
     name: macOS 安装包（universal dmg / app）
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
