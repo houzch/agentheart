@@ -1,0 +1,7 @@
+# 构建产物
+/target
+**/target
+
+# 代码生成
+**/gen/schemas
+**/*.rs.bk

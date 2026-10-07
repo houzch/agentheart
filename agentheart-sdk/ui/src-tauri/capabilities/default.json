@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "AgentHeart 控制台默认能力（仅允许核心 IPC，用于调用后端命令）",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

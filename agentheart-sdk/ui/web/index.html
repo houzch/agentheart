@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AgentHeart 控制台</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f8fb;
+        --panel: #ffffff;
+        --line: #dbe3ef;
+        --text: #0f172a;
+        --muted: #64748b;
+        --accent: #0b4a8f;
+        --ok: #047857;
+        --warn: #b45309;
+        --bad: #b91c1c;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b1220;
+          --panel: #121a2b;
+          --line: #24314b;
+          --text: #e2e8f0;
+          --muted: #94a3b8;
+          --accent: #60a5fa;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: system-ui, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 13px;
+      }
+      header {
+        position: sticky; top: 0; z-index: 5;
+        display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+        padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+      }
+      h1 { font-size: 15px; margin: 0 12px 0 0; color: var(--accent); }
+      input, select, button {
+        font-family: inherit; font-size: 13px; padding: 5px 8px;
+        border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text);
+      }
+      input.mono { font-family: ui-monospace, monospace; }
+      input.grow { flex: 1; min-width: 160px; }
+      button { cursor: pointer; }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      button:disabled { opacity: .5; cursor: not-allowed; }
+      .badge { padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+      .badge.on { color: var(--ok); border-color: var(--ok); }
+      nav { display: flex; gap: 4px; padding: 8px 16px 0; }
+      nav button { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+      nav button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+      main { padding: 12px 16px 24px; }
+      section { display: none; }
+      section.active { display: block; }
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-bottom: 14px; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+      .card .k { color: var(--muted); font-size: 12px; }
+      .card .v { font-size: 20px; font-family: ui-monospace, monospace; margin-top: 4px; }
+      table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+      th { color: var(--muted); font-weight: 600; font-size: 12px; }
+      tr:last-child td { border-bottom: none; }
+      td.mono, .mono { font-family: ui-monospace, monospace; }
+      .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+      .actions button { padding: 2px 8px; font-size: 12px; }
+      .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+      .muted { color: var(--muted); }
+      .empty { color: var(--muted); padding: 14px; text-align: center; }
+      #events { max-height: 168px; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-family: ui-monospace, monospace; font-size: 12px; }
+      #events div { padding: 1px 0; border-bottom: 1px dashed var(--line); }
+      #toast { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 9; }
+      #toast div { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; padding: 6px 10px; max-width: 360px; }
+      h2 { font-size: 13px; color: var(--muted); margin: 16px 0 8px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>AgentHeart 控制台</h1>
+      <select id="mode" title="承载模式">
+        <option value="embedded">内嵌内核</option>
+        <option value="socket">侧车 Sidecar</option>
+      </select>
+      <input id="addr" class="mono grow" value="127.0.0.1:17890" placeholder="地址 host:port" />
+      <input id="token" class="mono" value="" placeholder="访问令牌" size="12" />
+      <button id="btn-connect" class="primary">连接</button>
+      <button id="btn-disconnect" disabled>断开</button>
+      <span id="conn" class="badge">未连接</span>
+    </header>
+
+    <nav id="tabs"></nav>
+
+    <main>
+      <section id="overview" class="active">
+        <div class="cards">
+          <div class="card"><div class="k">状态</div><div class="v" id="c-status">—</div></div>
+          <div class="card"><div class="k">版本</div><div class="v" id="c-version">—</div></div>
+          <div class="card"><div class="k">心跳间隔 (ms)</div><div class="v" id="c-interval">—</div></div>
+          <div class="card"><div class="k">心跳滞后 (ms)</div><div class="v" id="c-lag">—</div></div>
+          <div class="card"><div class="k">就绪 / 在途</div><div class="v" id="c-ready">—</div></div>
+          <div class="card"><div class="k">队列数</div><div class="v" id="c-queues">—</div></div>
+          <div class="card"><div class="k">已提交</div><div class="v" id="c-submitted">—</div></div>
+          <div class="card"><div class="k">成功 / 失败 / 死信</div><div class="v" id="c-outcome">—</div></div>
+        </div>
+        <h2>事件流（实时）</h2>
+        <div id="events"></div>
+      </section>
+
+      <section id="tasks">
+        <div class="row">
+          <label class="muted">状态</label>
+          <select id="task-filter">
+            <option value="">全部</option>
+            <option value="pending">pending</option>
+            <option value="running">running</option>
+            <option value="succeeded">succeeded</option>
+            <option value="dead">dead</option>
+            <option value="paused">paused</option>
+            <option value="canceled">canceled</option>
+          </select>
+          <button id="task-refresh">刷新</button>
+        </div>
+        <table><thead><tr>
+          <th>ID</th><th>名称</th><th>队列</th><th>状态</th><th>优先级</th><th>尝试</th><th>操作</th>
+        </tr></thead><tbody id="task-rows"></tbody></table>
+      </section>
+
+      <section id="jobs">
+        <div class="row"><button id="job-refresh">刷新</button></div>
+        <table><thead><tr>
+          <th>ID</th><th>名称</th><th>队列</th><th>状态</th><th>下次触发</th><th>连续失败</th><th>操作</th>
+        </tr></thead><tbody id="job-rows"></tbody></table>
+      </section>
+
+      <section id="queues">
+        <div class="row">
+          <input id="q-declare-name" class="mono" placeholder="队列名" />
+          <input id="q-declare-cap" class="mono" placeholder="容量" size="8" />
+          <button id="q-declare">声明</button>
+          <input id="q-pub-name" class="mono" placeholder="队列名" />
+          <input id="q-pub-body" class="mono grow" placeholder="消息体" />
+          <button id="q-publish">发布</button>
+          <button id="q-refresh">刷新</button>
+        </div>
+        <table><thead><tr>
+          <th>队列</th><th>容量</th><th>积压</th><th>在途</th><th>已投递</th><th>已确认</th><th>死信</th><th>速率/s</th>
+        </tr></thead><tbody id="queue-rows"></tbody></table>
+      </section>
+
+      <section id="trace">
+        <div class="row">
+          <input id="trace-id" class="mono grow" placeholder="任务 ID（如 t-1）" />
+          <button id="trace-run">查询链路</button>
+        </div>
+        <table><thead><tr><th>跨度</th><th>开始 (ms)</th><th>时长 (ms)</th><th>结果</th><th>详情</th></tr></thead>
+          <tbody id="trace-rows"></tbody></table>
+      </section>
+
+      <section id="loops">
+        <div class="row">
+          <input id="loop-name" class="mono" placeholder="名称" />
+          <input id="loop-max" class="mono" placeholder="maxIterations" size="14" value="3" />
+          <input id="loop-interval" class="mono" placeholder="intervalMs" size="11" value="1000" />
+          <button id="loop-create">创建循环</button>
+          <button id="loop-refresh">刷新</button>
+        </div>
+        <table><thead><tr>
+          <th>ID</th><th>名称</th><th>状态</th><th>迭代</th><th>上限</th><th>间隔 (ms)</th><th>连续失败</th><th>操作</th>
+        </tr></thead><tbody id="loop-rows"></tbody></table>
+      </section>
+    </main>
+
+    <div id="toast"></div>
+
+    <script>
+      // 无需任何前端框架与第三方依赖：直接使用 Tauri 注入的全局 API。
+      const invoke = window.__TAURI__.core.invoke;
+
+      const TABS = [
+        ["overview", "总览"],
+        ["tasks", "任务中心"],
+        ["jobs", "定时任务"],
+        ["queues", "消息队列"],
+        ["trace", "链路追踪"],
+        ["loops", "循环任务"],
+      ];
+
+      const ACTIONS = {
+        "task.pause": (id) => ({ m: "task.pause", taskId: id }),
+        "task.resume": (id) => ({ m: "task.resume", taskId: id }),
+        "task.retry": (id) => ({ m: "task.retry", taskId: id, resetAttempts: true }),
+        "task.cancel": (id) => ({ m: "task.cancel", taskId: id }),
+        "job.enable": (id) => ({ m: "job.enable", jobId: id }),
+        "job.disable": (id) => ({ m: "job.disable", jobId: id }),
+        "job.trigger": (id) => ({ m: "job.trigger", jobId: id }),
+        "loop.pause": (id) => ({ m: "loop.pause", loopId: id }),
+        "loop.resume": (id) => ({ m: "loop.resume", loopId: id }),
+        "loop.stop": (id) => ({ m: "loop.stop", loopId: id }),
+        "loop.trigger": (id) => ({ m: "loop.trigger", loopId: id }),
+      };
+
+      let connected = false;
+      let activeTab = "overview";
+
+      const $ = (id) => document.getElementById(id);
+      const esc = (value) =>
+        String(value ?? "").replace(/[&<>"']/g, (ch) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]
+        );
+
+      function toast(message, bad) {
+        const node = document.createElement("div");
+        node.textContent = message;
+        if (bad) node.style.borderLeftColor = "var(--bad)";
+        $("toast").appendChild(node);
+        setTimeout(() => node.remove(), 4000);
+      }
+
+      async function call(request) {
+        const body = typeof request === "string" ? request : JSON.stringify(request);
+        return JSON.parse(await invoke("call", { request: body }));
+      }
+
+      async function send(request, okMessage) {
+        try {
+          const response = await call(request);
+          if (response.ok !== true) {
+            const error = response.error || {};
+            toast(`${request.m} 失败: ${error.codeName || ""} ${error.message || ""}`.trim(), true);
+          } else if (okMessage) {
+            toast(okMessage);
+          }
+          await refresh();
+          return response;
+        } catch (error) {
+          toast(String(error), true);
+          return null;
+        }
+      }
+
+      function actionsHtml(list) {
+        return `<div class="actions">${list
+          .map(([act, label]) => `<button data-act="${act}" data-id="__ID__">${label}</button>`)
+          .join("")}</div>`;
+      }
+
+      function renderRows(tbody, items, cells, actions) {
+        const body = $(tbody);
+        if (!items.length) {
+          body.innerHTML = `<tr><td colspan="9" class="empty">暂无数据</td></tr>`;
+          return;
+        }
+        body.innerHTML = items
+          .map((item) => {
+            const tds = cells.map((cell) => `<td>${cell(item)}</td>`).join("");
+            const acts = actions
+              ? `<td>${actions.replace(/__ID__/g, esc(item.id))}</td>`
+              : "";
+            return `<tr>${tds}${acts}</tr>`;
+          })
+          .join("");
+      }
+
+      // ---- 各页面渲染 ----
+
+      async function renderOverview() {
+        const health = (await call({ m: "system.health" })).result || {};
+        const beat = (await call({ m: "heartbeat.get" })).result || {};
+        const metrics = (await call({ m: "metrics.get" })).result || {};
+        const counters = metrics.counters || {};
+        $("c-status").textContent = health.status ?? "—";
+        $("c-version").textContent = health.version ?? "—";
+        $("c-interval").textContent = beat.intervalMs ?? "—";
+        $("c-lag").textContent = beat.lagMs ?? "—";
+        $("c-ready").textContent = `${beat.ready ?? "—"} / ${beat.inflight ?? "—"}`;
+        $("c-queues").textContent = health.queues ?? "—";
+        $("c-submitted").textContent = counters.submitted ?? "—";
+        $("c-outcome").textContent = `${counters.succeeded ?? "—"} / ${counters.failed ?? "—"} / ${counters.dead ?? "—"}`;
+      }
+
+      async function renderTasks() {
+        const filter = $("task-filter").value;
+        const request = { m: "task.list", page: { limit: 100 } };
+        if (filter) request.filter = { state: [filter] };
+        const items = ((await call(request)).result || {}).items || [];
+        renderRows(
+          "task-rows",
+          items,
+          [
+            (t) => `<td class="mono">${esc(t.id)}</td>`,
+            (t) => `<td>${esc(t.name || "")}</td>`,
+            (t) => `<td class="mono">${esc(t.queue)}</td>`,
+            (t) => `<td>${esc(t.state)}</td>`,
+            (t) => `<td>${esc(t.priority)}</td>`,
+            (t) => `<td>${esc(t.attempts)}/${esc(t.maxAttempts)}</td>`,
+          ],
+          actionsHtml([
+            ["task.pause", "暂停"],
+            ["task.resume", "恢复"],
+            ["task.retry", "重试"],
+            ["task.cancel", "取消"],
+          ])
+        );
+      }
+
+      async function renderJobs() {
+        const items = ((await call({ m: "job.list", page: { limit: 100 } })).result || {}).items || [];
+        const when = (ts) => (ts ? new Date(ts).toLocaleString() : "—");
+        renderRows(
+          "job-rows",
+          items,
+          [
+            (j) => `<td class="mono">${esc(j.id)}</td>`,
+            (j) => `<td>${esc(j.name)}</td>`,
+            (j) => `<td class="mono">${esc(j.queue)}</td>`,
+            (j) => `<td>${esc(j.state)}</td>`,
+            (j) => `<td>${esc(when(j.nextRunAt))}</td>`,
+            (j) => `<td>${esc(j.consecutiveFailures ?? 0)}/${esc(j.maxConsecutiveFailures ?? "—")}</td>`,
+          ],
+          actionsHtml([
+            ["job.enable", "启用"],
+            ["job.disable", "停用"],
+            ["job.trigger", "触发"],
+          ])
+        );
+      }
+
+      async function renderQueues() {
+        const queues = ((await call({ m: "queue.list" })).result || {}).queues || [];
+        if (!queues.length) {
+          renderRows("queue-rows", [], [], null);
+          return;
+        }
+        const stats = ((await call({ m: "queue.stats" })).result || {}).queues || [];
+        const byName = new Map(stats.map((s) => [s.name, s]));
+        const items = queues.map((name) => Object.assign({ id: name }, byName.get(name) || { name }));
+        renderRows(
+          "queue-rows",
+          items,
+          [
+            (q) => `<td class="mono">${esc(q.name)}</td>`,
+            (q) => `<td>${esc(q.capacity ?? "—")}</td>`,
+            (q) => `<td>${esc(q.depth ?? 0)}</td>`,
+            (q) => `<td>${esc(q.inflight ?? 0)}</td>`,
+            (q) => `<td>${esc(q.delivered ?? 0)}</td>`,
+            (q) => `<td>${esc(q.acked ?? 0)}</td>`,
+            (q) => `<td>${esc(q.dead ?? 0)}</td>`,
+            (q) => `<td>${Number(q.ratePerSec ?? 0).toFixed(2)}</td>`,
+          ],
+          null
+        );
+      }
+
+      async function runTrace() {
+        const id = $("trace-id").value.trim();
+        if (!id) return;
+        const spans = ((await call({ m: "trace.get", taskId: id })).result || {}).spans || [];
+        renderRows(
+          "trace-rows",
+          spans.map((s) => Object.assign({ id: s.name }, s)),
+          [
+            (s) => `<td class="mono">${esc(s.name)}</td>`,
+            (s) => `<td>${esc(s.startTs)}</td>`,
+            (s) => `<td>${esc(s.durMs)}</td>`,
+            (s) => `<td>${s.ok ? "成功" : "失败"}</td>`,
+            (s) => `<td>${esc(s.detail || "")}</td>`,
+          ],
+          null
+        );
+      }
+
+      async function renderLoops() {
+        const items = ((await call({ m: "loop.list", page: { limit: 100 } })).result || {}).items || [];
+        renderRows(
+          "loop-rows",
+          items,
+          [
+            (l) => `<td class="mono">${esc(l.id)}</td>`,
+            (l) => `<td>${esc(l.name || "")}</td>`,
+            (l) => `<td>${esc(l.state)}</td>`,
+            (l) => `<td>${esc(l.iteration)}</td>`,
+            (l) => `<td>${esc(l.maxIterations)}</td>`,
+            (l) => `<td>${esc(l.intervalMs)}</td>`,
+            (l) => `<td>${esc(l.consecutiveFailures ?? 0)}</td>`,
+          ],
+          actionsHtml([
+            ["loop.pause", "暂停"],
+            ["loop.resume", "恢复"],
+            ["loop.stop", "停止"],
+            ["loop.trigger", "触发"],
+          ])
+        );
+      }
+
+      async function refresh() {
+        if (!connected) return;
+        try {
+          if (activeTab === "overview") await renderOverview();
+          else if (activeTab === "tasks") await renderTasks();
+          else if (activeTab === "jobs") await renderJobs();
+          else if (activeTab === "queues") await renderQueues();
+          else if (activeTab === "loops") await renderLoops();
+        } catch (error) {
+          toast("刷新失败: " + error, true);
+        }
+      }
+
+      function pushEvent(event) {
+        const box = $("events");
+        const row = document.createElement("div");
+        const name = event.m || "event";
+        const detail = Object.entries(event)
+          .filter(([key]) => !["m", "seq"].includes(key))
+          .map(([key, value]) => `${key}=${value}`)
+          .join(" ");
+        row.textContent = `#${event.seq ?? "-"} ${name}  ${detail}`;
+        if (name === "event.error") row.style.color = "var(--bad)";
+        box.prepend(row);
+        while (box.childElementCount > 200) box.lastElementChild.remove();
+      }
+
+      async function pollEvents() {
+        if (!connected) return;
+        try {
+          const events = JSON.parse(await invoke("poll_events"));
+          events.forEach(pushEvent);
+          if (events.length && activeTab === "overview") await renderOverview();
+        } catch {
+          /* 忽略瞬时错误 */
+        }
+      }
+
+      // ---- 交互 ----
+
+      function buildTabs() {
+        $("tabs").innerHTML = TABS.map(
+          ([key, label]) => `<button data-tab="${key}">${label}</button>`
+        ).join("");
+      }
+
+      async function connect() {
+        const mode = $("mode").value;
+        try {
+          const result = JSON.parse(
+            await invoke("connect", { mode, addr: $("addr").value, token: $("token").value })
+          );
+          connected = true;
+          $("conn").textContent = `已连接 · ${result.mode}`;
+          $("conn").classList.add("on");
+          $("btn-connect").disabled = true;
+          $("btn-disconnect").disabled = false;
+          toast(`已连接内核（${result.mode}）`);
+          await refresh();
+        } catch (error) {
+          toast("连接失败: " + error, true);
+        }
+      }
+
+      async function disconnect() {
+        try {
+          await invoke("disconnect");
+        } catch {
+          /* 忽略 */
+        }
+        connected = false;
+        $("conn").textContent = "未连接";
+        $("conn").classList.remove("on");
+        $("btn-connect").disabled = false;
+        $("btn-disconnect").disabled = true;
+        $("events").innerHTML = "";
+      }
+
+      function bind() {
+        buildTabs();
+
+        $("btn-connect").addEventListener("click", connect);
+        $("btn-disconnect").addEventListener("click", disconnect);
+        $("task-refresh").addEventListener("click", renderTasks);
+        $("task-filter").addEventListener("change", renderTasks);
+        $("job-refresh").addEventListener("click", renderJobs);
+        $("q-refresh").addEventListener("click", renderQueues);
+        $("loop-refresh").addEventListener("click", renderLoops);
+        $("trace-run").addEventListener("click", runTrace);
+
+        $("q-declare").addEventListener("click", () => {
+          const queue = $("q-declare-name").value.trim();
+          if (!queue) return;
+          const capacity = $("q-declare-cap").value.trim();
+          const request = { m: "queue.declare", queue };
+          if (capacity) request.capacity = Number(capacity);
+          send(request, `队列 ${queue} 已声明`);
+        });
+
+        $("q-publish").addEventListener("click", () => {
+          const queue = $("q-pub-name").value.trim();
+          const body = $("q-pub-body").value;
+          if (!queue || !body) return;
+          send({ m: "queue.publish", queue, body }, "消息已发布");
+        });
+
+        $("loop-create").addEventListener("click", () => {
+          const request = {
+            m: "loop.create",
+            maxIterations: Number($("loop-max").value || 1),
+            intervalMs: Number($("loop-interval").value || 0),
+          };
+          const name = $("loop-name").value.trim();
+          if (name) request.name = name;
+          send(request, "循环已创建");
+        });
+
+        $("tabs").addEventListener("click", async (event) => {
+          const tab = event.target.dataset.tab;
+          if (!tab) return;
+          activeTab = tab;
+          document.querySelectorAll("nav button").forEach((button) => {
+            button.classList.toggle("active", button.dataset.tab === tab);
+          });
+          document.querySelectorAll("main section").forEach((section) => {
+            section.classList.toggle("active", section.id === tab);
+          });
+          await refresh();
+        });
+
+        // 行内控制操作（事件委托）
+        document.addEventListener("click", async (event) => {
+          const act = event.target.dataset.act;
+          if (!act) return;
+          const build = ACTIONS[act];
+          if (!build) return;
+          await send(build(event.target.dataset.id), `${act} 完成`);
+        });
+      }
+
+      bind();
+      setInterval(pollEvents, 1000);
+      setInterval(refresh, 3000);
+    </script>
+  </body>
+</html>

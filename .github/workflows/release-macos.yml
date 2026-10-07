@@ -1,0 +1,60 @@
+# AgentHeart · 发布（macOS 安装包）
+#
+# macOS 安装包无法在 Windows 上交叉构建（Tauri 打包依赖 macOS 宿主：
+# clang/Xcode SDK、hdiutil、codesign、iconutil），因此交由 macOS runner 产出。
+#
+# 触发方式：
+#   - Actions 页面手动触发（workflow_dispatch）
+#   - 推送 v* 标签
+#
+# 产物：AgentHeart_<version>_universal.dmg（含 .app），经 Actions Artifacts 下载。
+name: Release (macOS)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  macos:
+    name: macOS 安装包（universal dmg / app）
+    runs-on: macos-14
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # universal 需要同时具备 Apple Silicon 与 Intel 两个目标
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: 缓存 Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: agentheart-sdk/ui/src-tauri
+
+      - name: 安装 tauri-cli
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: 构建安装包（universal）
+        working-directory: agentheart-sdk/ui
+        run: cargo tauri build --target universal-apple-darwin
+
+      - name: 列出产物
+        run: |
+          find agentheart-sdk/ui/src-tauri/target/universal-apple-darwin/release/bundle \
+            -maxdepth 3 -type f \( -name '*.dmg' -o -name '*.app' \) -print
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentheart-macos
+          if-no-files-found: error
+          path: |
+            agentheart-sdk/ui/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            agentheart-sdk/ui/src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app

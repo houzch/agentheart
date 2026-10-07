@@ -1,0 +1,10 @@
+[package]
+name = "agentheart-sdk"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "AgentHeart Rust SDK：内核复用 + 本地 Socket 客户端"
+publish = false
+
+[dependencies]
+agentheart-core = { path = "../../agentheart-core" }

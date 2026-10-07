@@ -1,0 +1,18 @@
+[package]
+name = "agentheart-ui"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+description = "AgentHeart 控制台（可选 UI，内核外置，Tauri 2）"
+
+# 独立工作区：本产物位于内核之外，其依赖不进入内核依赖树。
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+agentheart-core = { path = "../../../agentheart-core" }
+agentheart-sdk = { path = "../../rust" }

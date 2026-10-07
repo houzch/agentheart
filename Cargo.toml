@@ -1,0 +1,14 @@
+# AgentHeart 工作区（公开仓库）
+#
+# - `agentheart-core`         ：内核（运行时零第三方依赖，仅 std）
+# - `agentheart-sdk/rust`     ：Rust SDK（薄封装 + 本地 Socket 客户端）
+# - `agentheart-sdk/adapters` ：接入适配器（命令行 / HTTP / MCP）
+#
+# 说明：
+# - 其它语言 SDK（node/python/go/java/csharp）与可选 UI（Tauri 2，ui/）
+#   不在 Rust 工作区成员内，随各自工具链独立构建。
+# - 测试与基准位于**独立私有仓库** `agentheart-test`（与本仓库同级目录），
+#   经 path 依赖引用本仓库的 `agentheart-core/`。
+[workspace]
+resolver = "3"
+members = ["agentheart-core", "agentheart-sdk/rust", "agentheart-sdk/adapters"]

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="EMPTY_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/agentheart-core/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/agentheart-sdk/adapters/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/agentheart-sdk/adapters/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/agentheart-sdk/adapters/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/agentheart-sdk/rust/src" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>

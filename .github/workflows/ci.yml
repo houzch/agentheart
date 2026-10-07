@@ -1,0 +1,79 @@
+# AgentHeart 公开仓库 CI
+#
+# 两个相互独立的作业：
+#   kernel —— 内核质量门禁 + 零第三方依赖断言（Ubuntu）
+#   ui     —— 可选 UI（独立工作区）依赖隔离检查（Windows）
+#
+# 说明：跨语言 E2E 与集成 / 协议 / 基准测试依赖私有测试仓库 `agentheart-test`
+# （独立仓库，不随本仓库开源），其 CI 见该仓库的 `.github/workflows/ci.yml`。
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 内核：格式 / Clippy / 测试 / 发布构建 / 零依赖断言
+  # ---------------------------------------------------------------------------
+  kernel:
+    name: 内核质量门禁（零依赖）
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: 格式检查
+        run: cargo fmt --all -- --check
+
+      - name: Clippy（-D warnings）
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: 单元 / 集成测试
+        run: cargo test --all
+
+      - name: 发布构建
+        run: cargo build --release
+
+      - name: 零依赖断言
+        run: |
+          set -euo pipefail
+          echo "---- cargo tree -e normal -p agentheart-core ----"
+          cargo tree -e normal -p agentheart-core
+          echo "---------------------------------------------------"
+          count=$(cargo tree -e normal -p agentheart-core | sed '/^[[:space:]]*$/d' | wc -l | tr -d ' ')
+          echo "agentheart-core 正常依赖树行数：${count}"
+          if [ "$count" -ne 1 ]; then
+            echo "::error::内核引入了第三方依赖：依赖树必须仅有 agentheart-core 自身一行"
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 可选 UI：独立工作区（Tauri 2），验证 UI 依赖不进入内核依赖树
+  # ---------------------------------------------------------------------------
+  ui:
+    name: UI 依赖隔离检查（独立工作区）
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: UI cargo check
+        run: cargo check --manifest-path agentheart-sdk/ui/src-tauri/Cargo.toml
+
+      - name: UI clippy（-D warnings）
+        run: cargo clippy --manifest-path agentheart-sdk/ui/src-tauri/Cargo.toml -- -D warnings
