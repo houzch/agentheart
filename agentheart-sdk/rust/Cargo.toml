@@ -1,6 +1,6 @@
 [package]
 name = "agentheart-sdk"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 rust-version = "1.85"
 description = "AgentHeart Rust SDK：内核复用 + 本地 Socket 客户端"
